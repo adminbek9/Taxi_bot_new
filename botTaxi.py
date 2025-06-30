@@ -1,53 +1,68 @@
-from telethon.sync import TelegramClient, events
+from telethon import TelegramClient, events
+from telethon.tl.types import User, Chat, Channel
 
-# Telegram API ma'lumotlaringiz
 api_id = 22731419
 api_hash = '2e2a9ce500a5bd08bae56f6ac2cc4890'
 
-# Telegram sessiya nomi
 client = TelegramClient('taxi_session', api_id, api_hash)
 
-# Faqat "odam bor" yoki "odam kerak" mazmunidagi kalit so‘zlar
+# Filtrlash uchun kalit so'zlar ro'yxati (kichik-katta harf farqi yo'q)
 keywords = [
-    'odam bor',
-    'Rishtondan toshkentga odam bor',
-    'Toshkentdan Rishtonga odam bor',
-    'Odam bor 1',
-    'Rishtonga odam bor',
-    'Toshkentga odam bor',
-    'pochta bor',
-    'rishtonga pochta bor',
-    'Rishtondan pochta bor',
-    'Toshkentga pochta bor',
-    'Toshkentdan pochta bor',
-    'ketadi',
-    'ketishadi',
-    'ketishi kerak',
-    'ketishi',
-    'ayol kishi ketadi'
+    'odam bor', 'rishtondan toshkentga odam bor', 'toshkentdan rishtonga odam bor',
+    'odam bor 1', 'rishtonga odam bor', 'toshkentga odam bor',
+    'pochta bor', 'rishtonga pochta bor', 'rishtondan pochta bor',
+    'toshkentga pochta bor', 'toshkentdan pochta bor',
+    'ketadi', 'ketishadi', 'ketishi kerak', 'ketishi', 'ayol kishi ketadi'
 ]
 
-# Xabarlarni yuboriladigan kanal yoki guruh username'i
-target_chat = '@rozimuhammadTaxi'  # To‘g‘ridan-to‘g‘ri username, link emas
+# Maqsadli kanal yoki guruh username (xabarlar shu yerga yuboriladi)
+target_chat = '@rozimuhammadTaxi'
 
-# Faqat guruh va kanallardan xabarlarni tekshirish (shaxsiy chat emas)
 @client.on(events.NewMessage(incoming=True))
 async def handler(event):
     try:
-        if not (await event.get_chat()).megagroup and not (await event.get_chat()).broadcast:
-            return  # Shaxsiy chat bo‘lsa, e'tibor bermaymiz
+        # Shaxsiy chatlarni o'tkazib yuborish
+        if event.is_private:
+            return
 
-        text = event.message.message.lower()
-        print("🔍 Tekshirilyapti:", text)
+        # Xabar matnini kichik harfga o'tkazib olish
+        text = event.raw_text.lower()
+        if not text:
+            return
 
-        for keyword in keywords:
-            if keyword in text:
-                await client.send_message(target_chat, f"🚖 E'lon topildi:\n\n{text}")
-                print("✅ Topildi va yuborildi:", text)
-                break
+        # Kalit so'zlardan hech biri topilmasa, o'tkazib yuborish
+        if not any(keyword in text for keyword in keywords):
+            return
+
+        # Chat (guruh yoki kanal) ma'lumotlarini olish
+        chat = await event.get_chat()
+
+        # Manba nomi va linkini tayyorlash
+        if hasattr(chat, 'username') and chat.username:
+            chat_link = f"https://t.me/{chat.username}/{event.message.id}"
+            chat_name = chat.title or chat.username
+            source_line = f"{chat_name} ({chat_link})"
+        else:
+            chat_name = chat.title or "Noma’lum guruh/kanal"
+            source_line = f"{chat_name} (Link yo‘q, yopiq guruh)"
+
+        # Xabarni tayyorlash (oddiy, aniq va chiroyli)
+        message_to_send = (
+            f"🚖 <b>Xabar topildi!</b>\n\n"
+            f"📄 <b>Matn:</b>\n{text}\n\n"
+            f"📍 <b>Qayerdan:</b>\n{source_line}\n\n"
+            f"🤝 <i>Hamkorlik va do‘stlik yo‘lidamiz. Siz bilan birgamiz!</i>"
+        )
+
+        # Maqsadli kanalgga xabar yuborish
+        await client.send_message(target_chat, message_to_send, parse_mode='html')
+
+        print("✅ Xabar yuborildi:", text[:50])
+
     except Exception as e:
         print("❌ Xatolik:", e)
 
-print("🚕 Taxi bot ishga tushdi, faqat guruh va kanallardagi xabarlarni tekshiryapti...")
+print("🚕 Taxi bot ishga tushdi...")
+
 client.start()
 client.run_until_disconnected()
